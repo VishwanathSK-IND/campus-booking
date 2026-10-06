@@ -10,6 +10,21 @@ const AuthContext = createContext(null);
  */
 export function AuthProvider({ children }) {
   const queryClient = useQueryClient();
+
+  /**
+   * Switches the session user. Only the *other* cached queries are removed:
+   * queryClient.clear() would also drop the ['auth','me'] query that this
+   * provider's useQuery is subscribed to, so the new user would never reach
+   * the UI and route guards would bounce back to /login.
+   */
+  const setSessionUser = useCallback(
+    (user) => {
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' });
+      queryClient.setQueryData(['auth', 'me'], user);
+    },
+    [queryClient],
+  );
+
   const { data, isPending } = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: async () => {
@@ -27,31 +42,28 @@ export function AuthProvider({ children }) {
   const login = useCallback(
     async (credentials) => {
       const res = await authApi.login(credentials);
-      queryClient.clear();
-      queryClient.setQueryData(['auth', 'me'], res.data.user);
+      setSessionUser(res.data.user);
       return res.data.user;
     },
-    [queryClient],
+    [setSessionUser],
   );
 
   const register = useCallback(
     async (body) => {
       const res = await authApi.register(body);
-      queryClient.clear();
-      queryClient.setQueryData(['auth', 'me'], res.data.user);
+      setSessionUser(res.data.user);
       return res.data.user;
     },
-    [queryClient],
+    [setSessionUser],
   );
 
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } finally {
-      queryClient.clear();
-      queryClient.setQueryData(['auth', 'me'], null);
+      setSessionUser(null);
     }
-  }, [queryClient]);
+  }, [setSessionUser]);
 
   const value = useMemo(
     () => ({
