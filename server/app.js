@@ -6,7 +6,13 @@ import morgan from 'morgan';
 import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 import { apiLimiter } from './middlewares/rateLimit.js';
+import adminRoutes from './routes/adminRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import bookingRoutes from './routes/bookingRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import resourceRoutes from './routes/resourceRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import waitlistRoutes from './routes/waitlistRoutes.js';
 
 export function createApp() {
   const app = express();
@@ -32,6 +38,12 @@ export function createApp() {
 
   app.use('/api', apiLimiter);
   app.use('/api/auth', authRoutes);
+  app.use('/api/resources', resourceRoutes);
+  app.use('/api/bookings', bookingRoutes);
+  app.use('/api/waitlists', waitlistRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/users', userRoutes);
+  app.use('/api/admin', adminRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
