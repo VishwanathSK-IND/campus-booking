@@ -34,18 +34,26 @@ async function main() {
   if (!room) throw new Error('Project Room 101 not found. Run npm run seed first.');
 
   const now = new Date();
-  const startAt = scenario === 'check-in' ? quarter(addMinutes(now, 1), 1) : quarter(addMinutes(now, -20), -1);
+  // check-in: the current quarter hour if it began ≤10 min ago (window still open), else the next one.
+  // no-show: the quarter hour ~20 min ago, so the 15-minute grace period has already passed.
+  let startAt;
+  if (scenario === 'check-in') {
+    const current = quarter(now, -1);
+    startAt = now - current <= 10 * 60 * 1000 ? current : quarter(now, 1);
+  } else {
+    startAt = quarter(addMinutes(now, -20), -1);
+  }
   const start = toLocalParts(startAt);
   const end = toLocalParts(addMinutes(startAt, 60));
-  if (end.date !== start.date) throw new Error('Too close to midnight for this demo; try again after 00:15.');
+  const endTime = end.date !== start.date ? '24:00' : end.time; // never cross midnight
 
-  // For the no-show scenario, the booking is made "an hour earlier" via the app clock.
-  if (scenario === 'no-show') clock.set(addMinutes(startAt, -60));
+  // Book "an hour earlier" via the application clock so the start time is still in the future for validation.
+  clock.set(addMinutes(startAt, -60));
   const { result } = await createBooking(user, {
     resourceId: room._id,
     date: start.date,
     startTime: start.time,
-    endTime: end.time === '00:00' ? '24:00' : end.time,
+    endTime,
     purpose: scenario === 'check-in' ? 'Demo: QR check-in' : 'Demo: missed booking (no-show)',
   });
   clock.reset();

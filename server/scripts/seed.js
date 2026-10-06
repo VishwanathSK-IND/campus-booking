@@ -191,7 +191,7 @@ async function main() {
       facilities: ['55" TV', 'Whiteboard', 'Wi-Fi'],
       operatingHours: EVERY_DAY('00:00', '24:00'),
       approvers: [mehta._id],
-      bookingRules: { slotMinutes: 30, maxDurationMinutes: 180, maxAdvanceDays: 14, maxActiveBookingsPerUser: 2 },
+      bookingRules: { slotMinutes: 15, minDurationMinutes: 15, maxDurationMinutes: 180, maxAdvanceDays: 14, maxActiveBookingsPerUser: 2 },
     },
     admin,
   );
@@ -271,6 +271,7 @@ async function main() {
   console.log(`Replayed ${created} historical bookings through the booking workflow`);
 
   // ── Current state for the live demo ─────────────────────────────────────
+  const historyEnd = new Date();
   const nextWeekday = (from) => {
     let d = addDays(from, 1);
     while ([0].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) d = addDays(d, 1);
@@ -307,7 +308,7 @@ async function main() {
   await changeResourceStatus(r.proj2._id, { status: 'MAINTENANCE', reason: 'Lamp replacement', cancelExistingBookings: false }, admin);
 
   // Historical notifications are marked read so the demo inbox shows only fresh items.
-  await Notification.updateMany({ createdAt: { $lt: addMinutes(realNow, -1) } }, { isRead: true });
+  await Notification.updateMany({ createdAt: { $lt: historyEnd } }, { isRead: true });
   await Notification.updateMany({ type: { $in: ['BOOKING_REMINDER', 'CHECK_IN_REMINDER'] } }, { isRead: true });
 
   console.log('\nDemo accounts (password for all: %s)', DEMO_PASSWORD);
