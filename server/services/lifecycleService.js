@@ -251,5 +251,8 @@ export async function cleanupOrphanLocks(now = clock.now()) {
     const dead = offerOwners.filter((id) => !liveSet.has(String(id)));
     if (dead.length) removed += (await SlotLock.deleteMany({ ownerType: 'OFFER', ownerId: { $in: dead }, createdAt: { $lt: cutoff } })).deletedCount;
   }
-  return { removedLocks: removed };
+
+  // Locks only guard future time (past slots can never be booked), so prune those older than two days.
+  const pruned = (await SlotLock.deleteMany({ slotStart: { $lt: addMinutes(now, -2 * 24 * 60) } })).deletedCount;
+  return { removedLocks: removed, prunedPastLocks: pruned };
 }
