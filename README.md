@@ -4,6 +4,22 @@ A MERN web application that gives students, faculty and administrators one relia
 discover, reserve, approve, check in to and analyse shared campus resources — labs, seminar
 halls, sports courts, rooms and equipment.
 
+## Live links
+
+| | Link |
+|---|---|
+| **Live application** | https://campus-booking-beta.vercel.app |
+| Backend API (health check) | https://campus-booking-api-quij.onrender.com/api/health |
+| Source code | https://github.com/VishwanathSK-IND/campus-booking |
+| Architecture document | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Postman collection | [server/postman/campus-booking.postman_collection.json](server/postman/campus-booking.postman_collection.json) |
+
+**Demo logins** (password for all: `Campus@123`): `admin@campus.edu` (admin), `mehta@campus.edu` (faculty / approver),
+`asha@campus.edu` (student). Students can also register their own account. More accounts: [Demo accounts](#demo-accounts-password-campus123).
+
+> The backend runs on Render's free tier and sleeps after ~15 minutes without traffic, so the
+> first request after a pause can take up to a minute. Later requests are fast.
+
 > Detailed design (schema, API map, authorization matrix, state machine, concurrency, jobs,
 > sockets, testing plan) is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
@@ -30,7 +46,7 @@ Search → Filter → View resource → Check availability → Select time → V
 → Check-in → Usage → Completion / No-show → Analytics
 ```
 
-## Major features (all implemented)
+## Key features (all implemented)
 
 - **Authentication**: register/login/logout, JWT in an HttpOnly cookie, bcrypt, protected routes. Students self-register; faculty/admins are provisioned by an admin.
 - **Role-based authorization** enforced on the server (student / faculty / admin, plus per-resource approver assignment).
@@ -252,14 +268,64 @@ offers/expiry and analytics. See [docs/ARCHITECTURE.md §14](docs/ARCHITECTURE.m
 
 ## Deployment
 
-Not deployed yet. The application is ready for the following setup:
+The application is deployed and publicly accessible:
+
+| Part | Service | URL |
+|---|---|---|
+| Frontend (React / Vite) | Vercel | https://campus-booking-beta.vercel.app |
+| Backend (Express + Socket.IO + scheduler) | Render (web service, Singapore) | https://campus-booking-api-quij.onrender.com |
+| Database | MongoDB Atlas (replica set, Singapore) | — (private) |
+| Source code | GitHub | https://github.com/VishwanathSK-IND/campus-booking |
 
 ```text
-client (Vite build)  → Vercel / Netlify         VITE_API_URL=VITE_SOCKET_URL=https://<api-host>
-server (Node)        → Render / Railway / Fly    NODE_ENV=production, CLIENT_URL=https://<web-host>,
-                                                 JWT_SECRET, MONGO_URI, TRUST_PROXY=true
-database             → MongoDB Atlas             (replica set → transactions enabled automatically)
+Browser ──▶ Vercel (static React build)
+   │
+   ├── REST  /api/*      ──▶ Render: Express ──▶ MongoDB Atlas
+   └── Socket.IO (cookie) ─▶ Render: Socket.IO + node-cron jobs
 ```
 
-The API must run as a long-lived process (not serverless) for Socket.IO and the scheduler.
-For an SPA host, add a rewrite of all paths to `index.html`.
+### How it is configured
+
+**Render (backend)**: root directory `server`, build `npm install`, start `npm start`,
+health check path `/api/health`, auto-deploy on commit.
+
+| Variable | Value |
+|---|---|
+| `NODE_ENV` | `production` (Secure + SameSite=None cookies, trust proxy, required secrets) |
+| `MONGO_URI` | Atlas connection string (kept in Render, never committed) |
+| `JWT_SECRET` | long random string (kept in Render, never committed) |
+| `CLIENT_URL` | `https://campus-booking-beta.vercel.app` |
+| `APP_TIMEZONE` | `Asia/Kolkata` |
+
+**Vercel (frontend)**: root directory `client`, framework Vite, build `npm run build`, output `dist`.
+[`client/vercel.json`](client/vercel.json) rewrites every path to `index.html` so routes such as
+`/dashboard` survive a page refresh.
+
+| Variable | Value |
+|---|---|
+| `VITE_API_URL` | `https://campus-booking-api-quij.onrender.com` |
+| `VITE_SOCKET_URL` | `https://campus-booking-api-quij.onrender.com` |
+| `VITE_APP_TIMEZONE` | `Asia/Kolkata` |
+
+Vite variables are baked in at build time, so changing them requires a redeploy on Vercel.
+
+**MongoDB Atlas**: one database user, network access `0.0.0.0/0` (Render has no fixed outbound IP;
+access still requires the user's credentials). The demo data was loaded by running `npm run seed`
+locally with `MONGO_URI` pointing at Atlas (the seed drops the database first, so the user needs
+permission to drop databases while seeding).
+
+### Updating the live site
+
+```bash
+git add .
+git commit -m "Describe the change"
+git push            # Render and Vercel redeploy automatically
+```
+
+### Notes
+
+- The API must run as a long-lived process (not serverless) because of Socket.IO and the scheduler.
+- On Render's free tier the service sleeps when idle; scheduled jobs (no-shows, reminders, waitlist
+  offers) pause while it sleeps and catch up when it wakes.
+- If `npm run seed` fails locally with `querySrv ECONNREFUSED`, the local DNS resolver is refusing
+  the SRV lookup for `mongodb+srv://` URIs; use a different DNS server (e.g. 8.8.8.8) for that run.
