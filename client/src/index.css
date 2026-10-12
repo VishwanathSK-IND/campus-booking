@@ -23,14 +23,3 @@ body {
   outline: 2px solid var(--color-brand-500);
   outline-offset: 2px;
 }
-
-/* html5-qrcode injects its own markup; keep it tidy. */
-#qr-reader {
-  border: none !important;
-}
-#qr-reader video {
-  border-radius: 0.75rem;
-}
-#qr-reader__dashboard_section_csr button {
-  @apply rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white;
-}

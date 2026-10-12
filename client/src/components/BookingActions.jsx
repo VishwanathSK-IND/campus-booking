@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { bookingApi } from '../api/endpoints.js';
 import { useToast } from '../hooks/useToast.jsx';
-import QrScanner from './QrScanner.jsx';
+import { formatTime } from '../utils/format.js';
 import { Alert, Button, Field, Modal, Textarea } from './ui.jsx';
 
 function useInvalidate() {
@@ -115,31 +115,33 @@ export function ReviewButtons({ booking, size = 'md' }) {
   );
 }
 
+/** Re-renders when the clock crosses the booking's start time and again when the check-in window closes. */
+function useCheckInClock(startAt, closesAt) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const next = [startAt, closesAt].map((t) => new Date(t).getTime()).find((t) => t >= now);
+    if (next === undefined) return undefined;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(next - now + 250, 2 ** 31 - 1));
+    return () => clearTimeout(timer);
+  }, [now, startAt, closesAt]);
+  return now;
+}
+
+/** One-click check-in: shown disabled until the booked start time, then enabled until the grace period ends. */
 export function CheckInButton({ booking, size = 'md' }) {
-  const [open, setOpen] = useState(false);
   const toast = useToast();
   const invalidate = useInvalidate();
+  const now = useCheckInClock(booking.startAt, booking.checkInClosesAt);
   const mutation = useMutation({
-    mutationFn: (token) => bookingApi.checkIn(booking._id, token),
-    onSuccess: (res) => {
-      invalidate(booking);
-      toast.success(res.message);
-      setOpen(false);
-    },
+    mutationFn: () => bookingApi.checkIn(booking._id),
+    onSuccess: (res) => (invalidate(booking), toast.success(res.message)),
+    onError: (err) => (invalidate(booking), toast.error(err.message)),
   });
+  if (now > new Date(booking.checkInClosesAt).getTime()) return null;
+  const early = now < new Date(booking.startAt).getTime();
   return (
-    <>
-      <Button size={size} onClick={() => (mutation.reset(), setOpen(true))}>
-        Check in
-      </Button>
-      <Modal open={open} onClose={() => setOpen(false)} title={`Check in · ${booking.resourceSnapshot?.name}`}>
-        {mutation.isError && (
-          <Alert className="mb-4" title="Check-in rejected">
-            {mutation.error.message}
-          </Alert>
-        )}
-        {open && <QrScanner busy={mutation.isPending} onCode={({ token }) => !mutation.isPending && mutation.mutate(token)} />}
-      </Modal>
-    </>
+    <Button size={size} disabled={early} loading={mutation.isPending} loadingText="Checking in…" onClick={() => mutation.mutate()}>
+      {early ? `Check in at ${formatTime(booking.startAt)}` : 'Check in'}
+    </Button>
   );
 }

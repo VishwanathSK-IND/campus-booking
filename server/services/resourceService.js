@@ -1,12 +1,10 @@
-import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import { env } from '../config/env.js';
 import { Booking } from '../models/Booking.js';
 import { Resource } from '../models/Resource.js';
 import { SlotLock } from '../models/SlotLock.js';
 import { User } from '../models/User.js';
 import { broadcast, emitToResource } from '../sockets/io.js';
-import { badRequest, conflict, forbidden, notFound } from '../utils/AppError.js';
+import { badRequest, conflict, notFound } from '../utils/AppError.js';
 import { clock } from '../utils/clock.js';
 import { dayOfWeek, localToDate, timeToMinutes } from '../utils/time.js';
 import { runInTransaction } from '../utils/transaction.js';
@@ -77,12 +75,6 @@ export async function getResource(resourceId, viewer) {
   const resource = await Resource.findById(resourceId).populate('approvers', 'name email role');
   if (!resource || (resource.status === 'INACTIVE' && viewer.role !== 'ADMIN')) throw notFound('Resource');
   return resource;
-}
-
-export function canManageCheckIn(user, resource) {
-  if (user.role === 'ADMIN') return true;
-  const approvers = (resource.approvers || []).map((a) => String(a._id || a));
-  return user.role === 'FACULTY' && approvers.includes(String(user._id));
 }
 
 async function assertApprovers(ids) {
@@ -273,22 +265,6 @@ export async function removeBlockedPeriod(resourceId, blockId, admin) {
   const { promoteWaitlistForResource } = await import('./waitlistService.js');
   await promoteWaitlistForResource(resource._id);
   return Resource.findById(resource._id);
-}
-
-/**
- * Venue check-in QR: a short-lived JWT bound to this resource. The kiosk at the
- * venue rotates it continuously, so a photographed code expires within
- * QR_TOKEN_TTL_SECONDS and cannot be used for a different resource.
- */
-export async function issueCheckInToken(resourceId, user) {
-  const resource = await Resource.findById(resourceId);
-  if (!resource) throw notFound('Resource');
-  if (!canManageCheckIn(user, resource)) throw forbidden('Only admins or assigned faculty can display the check-in code');
-  const ttl = env.QR_TOKEN_TTL_SECONDS;
-  const token = jwt.sign({ typ: 'checkin', rid: String(resource._id) }, env.QR_TOKEN_SECRET, { expiresIn: ttl });
-  const expiresAt = new Date(Date.now() + ttl * 1000);
-  const checkInUrl = `${env.CLIENT_URLS[0]}/check-in?resource=${resource._id}&token=${encodeURIComponent(token)}`;
-  return { token, expiresAt, ttlSeconds: ttl, checkInUrl, resource: { _id: resource._id, name: resource.name, location: resource.location } };
 }
 
 export function operatingWindow(resource, date) {

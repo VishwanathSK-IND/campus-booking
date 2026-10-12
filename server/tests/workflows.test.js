@@ -1,9 +1,7 @@
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import jwt from 'jsonwebtoken';
 import { clock, createUserAgent, localDate, resetDatabase, setupDatabase, teardownDatabase } from './helpers.js';
 import { bookingPayload, createResource } from './fixtures.js';
-import { env } from '../config/env.js';
 import { runAllJobs } from '../jobs/scheduler.js';
 import { AuditLog } from '../models/AuditLog.js';
 import { Booking } from '../models/Booking.js';
@@ -172,66 +170,52 @@ describe('cancellation', () => {
   });
 });
 
-describe('QR check-in', () => {
+describe('check-in', () => {
   async function setup() {
     const { agent: admin } = await createUserAgent('ADMIN');
     const lab = await createResource(admin);
-    const other = await createResource(admin, { name: 'Electronics Lab' });
     const student = await createUserAgent('STUDENT');
     const booking = (await student.agent.post('/api/bookings').send(await bookingPayload(lab._id))).body.data;
-    const token = async (resourceId = lab._id) => (await admin.get(`/api/resources/${resourceId}/check-in-token`)).body.data.token;
-    return { admin, lab, other, student, booking, token };
+    const checkIn = (agent = student.agent) => agent.post(`/api/bookings/${booking._id}/check-in`).send({});
+    return { student, booking, checkIn };
   }
 
-  it('issues short-lived resource-bound tokens only to admins/assigned faculty', async () => {
-    const { lab, student, token } = await setup();
-    assert.equal((await student.agent.get(`/api/resources/${lab._id}/check-in-token`)).status, 403);
-    const payload = jwt.decode(await token());
-    assert.equal(payload.rid, lab._id);
-    assert.equal(payload.exp - payload.iat, env.QR_TOKEN_TTL_SECONDS);
-  });
+  it('opens exactly at the start time, needs no code and rejects duplicates', async () => {
+    const { student, booking, checkIn } = await setup();
+    assert.equal(booking.checkInOpensAt, booking.startAt);
 
-  it('checks in inside the window and rejects duplicates', async () => {
-    const { student, booking, token } = await setup();
-    clock.set(minutes(booking.startAt, -5));
-    const res = await student.agent.post(`/api/bookings/${booking._id}/check-in`).send({ token: await token() });
+    clock.set(minutes(booking.startAt, -1));
+    const detail = await student.agent.get(`/api/bookings/${booking._id}`);
+    assert.equal(detail.body.data.actions.checkIn, true, 'button is shown (disabled in the UI) before start');
+    assert.equal((await checkIn()).body.code, 'CHECK_IN_TOO_EARLY');
+
+    clock.set(minutes(booking.startAt, 0));
+    const res = await checkIn();
     assert.equal(res.status, 200);
     assert.equal(res.body.data.status, 'CHECKED_IN');
     assert.ok(res.body.data.checkedInAt);
 
-    const again = await student.agent.post(`/api/bookings/${booking._id}/check-in`).send({ token: await token() });
+    const again = await checkIn();
     assert.equal(again.status, 409);
     assert.equal(again.body.code, 'ALREADY_CHECKED_IN');
   });
 
-  it('rejects expired, forged and other-resource tokens, other users, and early/late attempts', async () => {
-    const { other, student, booking, token } = await setup();
+  it('rejects other users and attempts after the grace period', async () => {
+    const { student, booking, checkIn } = await setup();
     clock.set(minutes(booking.startAt, 0));
-
-    const expired = jwt.sign({ typ: 'checkin', rid: booking.resource, exp: Math.floor(Date.now() / 1000) - 10 }, env.QR_TOKEN_SECRET);
-    assert.equal((await student.agent.post(`/api/bookings/${booking._id}/check-in`).send({ token: expired })).body.code, 'QR_TOKEN_EXPIRED');
-
-    const forged = jwt.sign({ typ: 'checkin', rid: booking.resource }, 'not-the-secret');
-    assert.equal((await student.agent.post(`/api/bookings/${booking._id}/check-in`).send({ token: forged })).body.code, 'QR_TOKEN_INVALID');
-
-    const wrongVenue = await student.agent.post(`/api/bookings/${booking._id}/check-in`).send({ token: await token(other._id) });
-    assert.equal(wrongVenue.status, 400);
-    assert.equal(wrongVenue.body.code, 'QR_RESOURCE_MISMATCH');
-
     const intruder = await createUserAgent('STUDENT');
-    assert.equal((await intruder.agent.post(`/api/bookings/${booking._id}/check-in`).send({ token: await token() })).status, 403);
+    assert.equal((await checkIn(intruder.agent)).status, 403);
 
-    clock.set(minutes(booking.startAt, -30));
-    assert.equal((await student.agent.post(`/api/bookings/${booking._id}/check-in`).send({ token: await token() })).body.code, 'CHECK_IN_TOO_EARLY');
     clock.set(minutes(booking.startAt, 16));
-    assert.equal((await student.agent.post(`/api/bookings/${booking._id}/check-in`).send({ token: await token() })).body.code, 'CHECK_IN_CLOSED');
+    assert.equal((await checkIn()).body.code, 'CHECK_IN_CLOSED');
+    assert.equal((await student.agent.get(`/api/bookings/${booking._id}`)).body.data.actions.checkIn, false);
     assert.equal((await Booking.findById(booking._id)).status, 'CONFIRMED');
   });
 
   it('checked-in bookings complete after they end', async () => {
-    const { student, booking, token } = await setup();
+    const { booking, checkIn } = await setup();
     clock.set(minutes(booking.startAt, 1));
-    await student.agent.post(`/api/bookings/${booking._id}/check-in`).send({ token: await token() });
+    await checkIn();
     clock.set(minutes(booking.endAt, 1));
     await runAllJobs();
     assert.equal((await Booking.findById(booking._id)).status, 'COMPLETED');

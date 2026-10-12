@@ -23,8 +23,6 @@ router.post('/', admin, validate({ body: createResourceSchema }), resources.crea
 
 router.get('/:resourceId', id, resources.detail);
 router.get('/:resourceId/availability', id, validate({ query: availabilityQuery }), resources.availability);
-// Authorisation (admin or assigned faculty) is checked in the service.
-router.get('/:resourceId/check-in-token', id, resources.checkInToken);
 
 router.patch('/:resourceId', id, admin, validate({ body: updateResourceSchema }), resources.update);
 router.patch('/:resourceId/status', id, admin, validate({ body: resourceStatusSchema }), resources.changeStatus);

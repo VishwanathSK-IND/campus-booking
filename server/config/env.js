@@ -26,8 +26,6 @@ export const env = {
   MONGO_URI: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/campus_booking',
   JWT_SECRET: secret('JWT_SECRET', 'dev-only-jwt-secret-change-me'),
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
-  QR_TOKEN_SECRET: secret('QR_TOKEN_SECRET', 'dev-only-qr-secret-change-me'),
-  QR_TOKEN_TTL_SECONDS: Number(process.env.QR_TOKEN_TTL_SECONDS) || 90,
   CLIENT_URLS: (process.env.CLIENT_URL || 'http://localhost:5173')
     .split(',')
     .map((url) => url.trim())

@@ -30,7 +30,6 @@ const bookingRulesSchema = new mongoose.Schema(
     approvalExemptRoles: { type: [String], enum: ROLES, default: ['ADMIN'] },
     facultyPriority: { type: Boolean, default: false },
     cancellationDeadlineMinutes: { type: Number, default: 60 },
-    checkInOpensBeforeMinutes: { type: Number, default: 15 },
     checkInGraceMinutes: { type: Number, default: 15 },
   },
   { _id: false },

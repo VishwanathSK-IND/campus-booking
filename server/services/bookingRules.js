@@ -88,7 +88,8 @@ export function policySnapshot(resource, startAt, endAt) {
   const rules = resource.bookingRules;
   const closes = addMinutes(startAt, rules.checkInGraceMinutes);
   return {
-    checkInOpensAt: addMinutes(startAt, -rules.checkInOpensBeforeMinutes),
+    // Check-in opens exactly at the booked start time.
+    checkInOpensAt: startAt,
     checkInClosesAt: closes < endAt ? closes : endAt,
     cancellationDeadlineAt: addMinutes(startAt, -rules.cancellationDeadlineMinutes),
   };

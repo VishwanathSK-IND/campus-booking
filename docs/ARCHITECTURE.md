@@ -2,7 +2,7 @@
 
 This document records the design decisions behind the implementation: architecture,
 data model, API, authorization, the booking state machine, and the strategies for
-conflicts, waitlists, QR check-in, background jobs and real-time updates.
+conflicts, waitlists, check-in, background jobs and real-time updates.
 
 ---
 
@@ -88,18 +88,16 @@ All responses: `{ success, message, data, meta? }` or `{ success:false, message,
 | `GET /api/resources/locations` | auth | Distinct locations for filters |
 | `GET /api/resources/:id` | auth | Details (+ `canManageCheckIn`) |
 | `GET /api/resources/:id/availability?date=` | auth | Slot statuses + merged intervals |
-| `GET /api/resources/:id/check-in-token` | admin / assigned faculty | Rotating venue QR token |
 | `POST /api/resources` · `PATCH /api/resources/:id` | admin | Create / edit (rules, hours, approvers) |
 | `PATCH /api/resources/:id/status` | admin | ACTIVE / MAINTENANCE / INACTIVE (+ optional cancel of upcoming bookings) |
 | `POST /api/resources/:id/blocks` · `DELETE …/blocks/:blockId` | admin | Blocked periods |
 | `POST /api/bookings` (`Idempotency-Key` header) | auth | Create booking |
 | `GET /api/bookings?scope=upcoming\|pending\|completed\|cancelled\|noshow\|all` | auth | Own bookings |
 | `GET /api/bookings/pending-approvals` | faculty, admin | Review queue (scoped for faculty) |
-| `GET /api/bookings/check-in-candidates?resource=` | auth | Own bookings at a venue |
 | `GET /api/bookings/:id` | owner, admin, assigned approver | Details + allowed actions |
 | `POST /api/bookings/:id/approve` · `/reject` | admin, assigned faculty | Review (reject needs reason) |
 | `POST /api/bookings/:id/cancel` | owner, admin | Cancel |
-| `POST /api/bookings/:id/check-in` `{token}` | owner | QR check-in |
+| `POST /api/bookings/:id/check-in` | owner | One-click check-in (from start time until grace period ends) |
 | `POST /api/waitlists` · `GET /api/waitlists` | auth | Join / list own |
 | `POST /api/waitlists/:id/accept` · `/decline` · `DELETE /api/waitlists/:id` | entry owner | Respond / leave |
 | `GET /api/notifications` · `GET …/unread-count` · `PATCH …/:id/read` · `POST …/read-all` | auth (own only) | Notifications |
@@ -142,7 +140,6 @@ duplicate `/api/admin/resources` tree; admins see all statuses through the same 
 | Cancel another user's booking | ✘ | ✘ | ✔ with reason (audited) |
 | View a booking | own | own + assigned resources | all |
 | Approve / reject | ✘ | assigned resources only, never own | ✔, never own |
-| Show venue check-in QR (kiosk) | ✘ | assigned resources | ✔ |
 | Check in | own booking only | own booking only | own booking only |
 | Create / edit resources, rules, hours, blocks, status | ✘ | ✘ | ✔ |
 | Analytics | ✘ | assigned resources only | campus-wide |
@@ -153,7 +150,7 @@ Enforced by `requireRole` on routes plus per-record checks in services (ownershi
 ## 7. Booking state machine
 
 ```text
-                   approve                 check-in (QR, in window)        booking ends (job)
+                   approve                 check-in (button, in window)    booking ends (job)
 PENDING_APPROVAL ──────────▶ CONFIRMED ─────────────────────────▶ CHECKED_IN ─────────────────▶ COMPLETED
    │   │   │                    │   │
    │   │   └─reject─▶ REJECTED  │   └─grace period passed, no check-in (job)─▶ NO_SHOW
@@ -227,18 +224,19 @@ one booking; concurrent bookings by one user never exceed the limit.
   (subject to the normal approval rule). **Decline/expiry** releases the hold and promotes the next entry.
 - Stale WAITING entries expire when their start time passes.
 
-## 10. QR check-in strategy
+## 10. Check-in strategy
 
-- The venue shows a **kiosk page** (`/kiosk/:resourceId`, admin or assigned faculty) with a QR
-  encoding `…/check-in?resource=<id>&token=<JWT>`. The JWT is signed with a separate
-  `QR_TOKEN_SECRET`, bound to the resource (`rid`) and expires after `QR_TOKEN_TTL_SECONDS`
-  (default 90 s). The kiosk refreshes it every ttl/2, so a photographed code stops working quickly.
-- The student scans it with their phone (camera scanner via `html5-qrcode`, with a paste fallback),
-  or opens the link; the page lists their bookings at that venue.
-- `POST /api/bookings/:id/check-in {token}` verifies: signature & expiry → booking exists →
-  belongs to the caller → token resource == booking resource → not already checked in (409) →
-  status CONFIRMED → now within `[checkInOpensAt, checkInClosesAt]` (configurable per resource,
-  snapshotted on the booking) → atomic `CONFIRMED → CHECKED_IN`.
+- No QR code or link: the booking owner checks in with one click on the booking.
+- The check-in window opens **exactly at the booked start time** (`checkInOpensAt = startAt`) and
+  closes `checkInGraceMinutes` later (default 15, configurable per resource, capped at `endAt`);
+  both are snapshotted on the booking.
+- The server exposes `actions.checkIn` while the owner's CONFIRMED booking is before
+  `checkInClosesAt`. The UI shows the button disabled ("Check in at HH:MM") until `startAt`, then
+  enables it via a timer (no refresh needed) and hides it once the window closes.
+- `POST /api/bookings/:id/check-in` verifies: booking exists → belongs to the caller → not already
+  checked in (409) → status CONFIRMED → now ≥ `startAt` (`422 CHECK_IN_TOO_EARLY`) and
+  ≤ `checkInClosesAt` (`422 CHECK_IN_CLOSED`) → atomic `CONFIRMED → CHECKED_IN`.
+  The client clock is never trusted; the server re-checks every rule.
 
 ## 11. Background-job strategy
 
@@ -285,8 +283,8 @@ REST keeps working and the unread count polls every 60 s.
 | Route | Access |
 |---|---|
 | `/`, `/login`, `/register` | public (login/register redirect if signed in) |
-| `/dashboard`, `/resources`, `/resources/:id`, `/resources/:id/book`, `/my-bookings`, `/bookings/:id`, `/check-in`, `/notifications`, `/profile` | signed in |
-| `/approvals`, `/analytics`, `/kiosk/:resourceId` | faculty + admin |
+| `/dashboard`, `/resources`, `/resources/:id`, `/resources/:id/book`, `/my-bookings`, `/bookings/:id`, `/notifications`, `/profile` | signed in |
+| `/approvals`, `/analytics` | faculty + admin |
 | `/admin`, `/admin/resources`, `/admin/resources/new`, `/admin/resources/:id/edit`, `/admin/bookings`, `/admin/users`, `/admin/analytics`, `/admin/policy`, `/admin/audit` | admin |
 
 Route guards only shape the UI; the API enforces every permission independently.
@@ -298,7 +296,7 @@ Automated (`cd server && npm test`, Node test runner + supertest against a real 
 - **auth.test.js** — registration, normalisation, hashing, no password leakage, self-admin prevented, duplicates, login/me/logout, uniform 401, invalid/tampered/deactivated tokens, 400 malformed JSON, 413 oversized body.
 - **resources.test.js** — admin-only CRUD + audit, validation, search/filter/sort/pagination, availability filter, slot statuses (booked/blocked/maintenance), block conflicts, maintenance with cancellation.
 - **bookings.test.js** — snapshots & codes, every validation rule, maintenance/inactive/role checks, arbitrary overlap, slot-size change, limits, own-overlap, restriction 403, **concurrency (Test A)**, **double-click idempotency (Test B)**, concurrent per-user limit.
-- **workflows.test.js** — approval (assigned approvers, unauthorised reviewers, rejection reason, **approval after cancellation → 409 (Test D)**, approve/cancel race, resource-maintenance revalidation, priority ordering, expiry), cancellation deadline/ownership/admin reason, QR check-in (valid, duplicate, expired, forged, wrong venue, other user, early, late, completion), no-show (concurrent jobs, escalation, restriction, lift), reminders once, waitlist (join rules, duplicates, positions, offer → accept, **concurrent promotion (Test C)**, expiry → next user, priority, decline), analytics numbers.
+- **workflows.test.js** — approval (assigned approvers, unauthorised reviewers, rejection reason, **approval after cancellation → 409 (Test D)**, approve/cancel race, resource-maintenance revalidation, priority ordering, expiry), cancellation deadline/ownership/admin reason, check-in (opens exactly at start, no code needed, duplicate, other user, early, late, completion), no-show (concurrent jobs, escalation, restriction, lift), reminders once, waitlist (join rules, duplicates, positions, offer → accept, **concurrent promotion (Test C)**, expiry → next user, priority, decline), analytics numbers.
 - **security.test.js** — unauthenticated access, expired/forged JWTs, students vs admin APIs, other users' bookings/notifications, faculty vs admin config, malformed ids/query params, operator injection, admin provisioning and self-lockout.
 
 Manual: `npm run seed`, then the five demo workflows in the README, plus `npm run demo -- check-in | no-show`.

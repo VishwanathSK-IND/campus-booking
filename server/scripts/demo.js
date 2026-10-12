@@ -2,8 +2,8 @@
  * Prepares live-demo bookings in Project Room 101 (open 24×7) through the real
  * booking service, using the application clock to place the booking time.
  *
- *   npm run demo -- check-in [email]  booking starting at the next quarter hour
- *                                      → check-in window is open right away
+ *   npm run demo -- check-in [email]  booking that started ≤10 min ago (or starts at
+ *                                      the next quarter hour) → Check in unlocks at start
  *   npm run demo -- no-show [email]   booking that started 20 minutes ago and was
  *                                      never checked in → the scheduler (or
  *                                      Admin ▸ Run jobs now) marks it NO_SHOW
@@ -54,13 +54,13 @@ async function main() {
     date: start.date,
     startTime: start.time,
     endTime,
-    purpose: scenario === 'check-in' ? 'Demo: QR check-in' : 'Demo: missed booking (no-show)',
+    purpose: scenario === 'check-in' ? 'Demo: check-in' : 'Demo: missed booking (no-show)',
   });
   clock.reset();
 
   console.log(`${result.code}  ${room.name}  ${result.date} ${result.startTime}–${result.endTime}  ${result.status}  (${user.email})`);
   if (scenario === 'check-in') {
-    console.log('Open the booking as the student, show the kiosk (Admin ▸ Resources ▸ Kiosk QR) and scan/paste the code.');
+    console.log('Open the booking as the student: the Check in button unlocks at the start time.');
   } else {
     console.log('The check-in window has closed. Within a minute the scheduler marks it NO_SHOW (or use Admin ▸ Run jobs now).');
   }

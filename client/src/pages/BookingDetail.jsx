@@ -21,8 +21,6 @@ export default function BookingDetail() {
 
   const isOwner = String(booking.user) === String(user._id);
   const justCreated = params.get('created') === '1';
-  const now = Date.now();
-  const checkInUpcoming = isOwner && booking.status === 'CONFIRMED' && now < new Date(booking.checkInOpensAt).getTime();
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -40,7 +38,7 @@ export default function BookingDetail() {
 
       {justCreated && booking.status === 'CONFIRMED' && (
         <Alert tone="success" className="mb-6">
-          Booking confirmed successfully. Remember to check in at the venue between {formatTime(booking.checkInOpensAt)} and {formatTime(booking.checkInClosesAt)}.
+          Booking confirmed successfully. Remember to press Check in between {formatTime(booking.startAt)} and {formatTime(booking.checkInClosesAt)}.
         </Alert>
       )}
       {justCreated && booking.status === 'PENDING_APPROVAL' && (
@@ -82,7 +80,7 @@ export default function BookingDetail() {
               ['Approval', { NOT_REQUIRED: 'Not required', PENDING: 'Awaiting review', APPROVED: `Approved${booking.approvedBy ? ` by ${booking.approvedBy.name}` : ''}`, REJECTED: 'Rejected' }[booking.approvalStatus]],
               booking.reviewNote && ['Reviewer note', booking.reviewNote],
               booking.rejectionReason && ['Rejection reason', booking.rejectionReason],
-              ['Check-in', booking.checkedInAt ? `Checked in at ${formatTime(booking.checkedInAt)}` : `Window ${formatTime(booking.checkInOpensAt)} – ${formatTime(booking.checkInClosesAt)}`],
+              ['Check-in', booking.checkedInAt ? `Checked in at ${formatTime(booking.checkedInAt)}` : `Window ${formatTime(booking.startAt)} – ${formatTime(booking.checkInClosesAt)}`],
               booking.status === 'CONFIRMED' && ['Cancel until', formatDateTime(booking.cancellationDeadlineAt)],
               booking.cancelledAt && ['Cancelled', `${formatDateTime(booking.cancelledAt)}${booking.cancelledBy ? ` by ${booking.cancelledBy.name}` : ''}${booking.cancellationReason ? ` — ${booking.cancellationReason}` : ''}`],
               booking.source === 'WAITLIST' && ['Source', 'Accepted from the waitlist'],
@@ -91,10 +89,6 @@ export default function BookingDetail() {
           />
         </div>
       </Card>
-
-      {checkInUpcoming && (
-        <p className="mt-4 text-sm text-slate-500">The Check in button appears when the check-in window opens at {formatTime(booking.checkInOpensAt)}.</p>
-      )}
 
       <Card className="mt-6 p-5">
         <h2 className="mb-3 font-semibold text-slate-900">History</h2>

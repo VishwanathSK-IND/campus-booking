@@ -14,11 +14,9 @@ const ResourceDetail = lazy(() => import('./pages/ResourceDetail.jsx'));
 const BookResource = lazy(() => import('./pages/BookResource.jsx'));
 const MyBookings = lazy(() => import('./pages/MyBookings.jsx'));
 const BookingDetail = lazy(() => import('./pages/BookingDetail.jsx'));
-const CheckIn = lazy(() => import('./pages/CheckIn.jsx'));
 const Notifications = lazy(() => import('./pages/Notifications.jsx'));
 const Profile = lazy(() => import('./pages/Profile.jsx'));
 const Approvals = lazy(() => import('./pages/Approvals.jsx'));
-const Kiosk = lazy(() => import('./pages/Kiosk.jsx'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.jsx'));
 const AdminResources = lazy(() => import('./pages/admin/AdminResources.jsx'));
 const AdminResourceForm = lazy(() => import('./pages/admin/AdminResourceForm.jsx'));
@@ -39,11 +37,6 @@ export default function App() {
         </Route>
 
         <Route element={<RequireAuth />}>
-          {/* Full-screen venue display, no navigation chrome. */}
-          <Route element={<RequireRole roles={['ADMIN', 'FACULTY']} />}>
-            <Route path="/kiosk/:resourceId" element={<Kiosk />} />
-          </Route>
-
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/resources" element={<Resources />} />
@@ -51,7 +44,6 @@ export default function App() {
             <Route path="/resources/:resourceId/book" element={<BookResource />} />
             <Route path="/my-bookings" element={<MyBookings />} />
             <Route path="/bookings/:bookingId" element={<BookingDetail />} />
-            <Route path="/check-in" element={<CheckIn />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/profile" element={<Profile />} />
 

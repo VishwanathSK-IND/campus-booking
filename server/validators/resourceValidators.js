@@ -36,7 +36,6 @@ const bookingRules = z
     approvalExemptRoles: roleList,
     facultyPriority: z.boolean(),
     cancellationDeadlineMinutes: z.number().int().min(0).max(7 * 24 * 60),
-    checkInOpensBeforeMinutes: z.number().int().min(0).max(120),
     checkInGraceMinutes: z.number().int().min(1).max(120),
   })
   .partial();

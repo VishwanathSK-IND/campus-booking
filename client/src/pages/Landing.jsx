@@ -7,7 +7,7 @@ const FEATURES = [
   ['No double bookings', 'Overlapping reservations are rejected by the server, even when two people click Book at the same moment.'],
   ['Approvals built in', 'Seminar halls and specialist labs route requests to the assigned faculty or admin for review.'],
   ['Fair waitlists', 'Join a waitlist for a taken slot. When it frees up, the next person in line gets a time-limited offer.'],
-  ['QR check-in', 'Check in by scanning the rotating code at the venue. Unused bookings are released automatically.'],
+  ['One-click check-in', 'Check in with one click when your booking starts. Unused bookings are released automatically.'],
   ['Usage insights', 'Utilisation, peak hours and no-show rates help administrators plan campus resources.'],
 ];
 

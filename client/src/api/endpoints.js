@@ -20,7 +20,6 @@ export const resourceApi = {
   setStatus: (id, body) => send('patch', `/resources/${id}/status`, body),
   addBlock: (id, body) => send('post', `/resources/${id}/blocks`, body),
   removeBlock: (id, blockId) => send('delete', `/resources/${id}/blocks/${blockId}`),
-  checkInToken: (id) => get(`/resources/${id}/check-in-token`),
 };
 
 export const bookingApi = {
@@ -28,11 +27,10 @@ export const bookingApi = {
   mine: (params) => request({ url: '/bookings', params: clean(params) }),
   get: (id) => get(`/bookings/${id}`),
   pendingApprovals: (params) => request({ url: '/bookings/pending-approvals', params: clean(params) }),
-  checkInCandidates: (resource) => get('/bookings/check-in-candidates', { resource }),
   approve: (id, body) => send('post', `/bookings/${id}/approve`, body),
   reject: (id, body) => send('post', `/bookings/${id}/reject`, body),
   cancel: (id, body) => send('post', `/bookings/${id}/cancel`, body),
-  checkIn: (id, token) => send('post', `/bookings/${id}/check-in`, { token }),
+  checkIn: (id) => send('post', `/bookings/${id}/check-in`),
 };
 
 export const waitlistApi = {

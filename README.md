@@ -27,7 +27,7 @@ The core of the product is a complete booking lifecycle rather than CRUD records
 ```text
 Search → Filter → View resource → Check availability → Select time → Validate rules
 → Conflict-safe reservation → Approval (if required) → Confirmation → Reminder
-→ QR check-in → Usage → Completion / No-show → Analytics
+→ Check-in → Usage → Completion / No-show → Analytics
 ```
 
 ## Major features (all implemented)
@@ -41,7 +41,7 @@ Search → Filter → View resource → Check availability → Select time → V
 - **Approval workflow** with revalidation, rejection reasons, priority-ordered queue and automatic expiry.
 - **Cancellation** with deadlines, admin cancellation with reasons, history preserved.
 - **Waitlist** with deterministic ordering, time-limited offers, accept/decline, concurrency-safe promotion.
-- **QR check-in** using rotating, short-lived, venue-bound tokens (kiosk display + phone camera scanner).
+- **One-click check-in**: the booking's **Check in** button unlocks exactly at the booked start time and stays available until the grace period ends.
 - **No-show handling** by a background job, with escalating, configurable, temporary restrictions.
 - **Notifications** (persistent, read/unread, real-time push) for every booking event and reminders.
 - **Real-time updates** with Socket.IO, with resync on reconnect.
@@ -52,7 +52,7 @@ Search → Filter → View resource → Check availability → Select time → V
 
 1. **Resource booking** — Student logs in → Resources → searches "computer" → filters category *Laboratory* → opens *Computer Lab 1* → picks a date → clicks a free slot (and a later one to extend) → enters a purpose → **Book now** → server validates → confirmation page with booking code.
 2. **Approval** — Student books *Seminar Hall A* → status *Pending approval* (slot held) → Dr. Mehta (assigned approver) gets a notification → **Approvals** → Approve (student notified, booking *Confirmed*) or Reject with a reason.
-3. **QR check-in & no-show** — Admin opens *Admin ▸ Resources ▸ Kiosk QR* for the venue → student opens the booking ▸ **Check in** → scans the code (or pastes the link) → *Checked in*. A confirmed booking without check-in becomes *No-show* when the grace period passes (scheduler, every minute), creating a no-show record, warning/restriction and notification.
+3. **Check-in & no-show** — Student opens the booking: before the start time the button shows *Check in at HH:MM* (disabled); at the start time it unlocks → **Check in** → *Checked in*. A confirmed booking without check-in becomes *No-show* when the grace period passes (scheduler, every minute), creating a no-show record, warning/restriction and notification.
 4. **Waitlist** — A slot is taken → student selects it on the booking page → **Join waitlist** (position shown) → the holder cancels → the next eligible person receives a held, 15-minute offer → **Accept** → booking confirmed.
 5. **Admin analytics** — Admin logs in → dashboard (resources, today's bookings, pending approvals, utilisation, no-shows, peak resources) → **Analytics**: statistics, utilisation by resource, peak hours/days, most-used resources, cancellation and no-show rates for any date range.
 
@@ -60,7 +60,7 @@ Search → Filter → View resource → Check availability → Select time → V
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19, Vite, React Router, TanStack Query, Axios, Tailwind CSS 4, socket.io-client, qrcode.react, html5-qrcode |
+| Frontend | React 19, Vite, React Router, TanStack Query, Axios, Tailwind CSS 4, socket.io-client |
 | Backend | Node.js (≥ 20), Express 5, Mongoose 8, zod, jsonwebtoken, bcryptjs, cookie-parser, helmet, cors, express-rate-limit, node-cron, luxon, Socket.IO |
 | Database | MongoDB (standalone or Atlas replica set) |
 | Tests | Node test runner, supertest |
@@ -93,7 +93,7 @@ client/src/
   hooks/        auth, socket, toast
   routes/       route guards
   layouts/      app + auth layouts
-  components/   UI kit, availability grid, booking actions, QR scanner, charts
+  components/   UI kit, availability grid, booking actions, charts
   pages/        user pages and pages/admin/*
   utils/        formatting, status metadata
 ```
@@ -171,15 +171,15 @@ restrictions are real outputs of the business logic.
 
 ```bash
 cd server
-npm run demo -- check-in [email]   # booking in Project Room 101 whose check-in window is open now
+npm run demo -- check-in [email]   # booking in Project Room 101 that has just started
+                                   # (or starts at the next quarter hour)
 npm run demo -- no-show  [email]   # booking that started ~20 min ago, never checked in;
                                    # the scheduler marks it NO_SHOW within a minute
                                    # (or Admin ▸ "Run scheduled jobs now")
 ```
 
-For check-in: log in as admin in one window and open *Resources ▸ Project Room 101 ▸ Check-in kiosk*;
-log in as the student in another (or on a phone on the same network) and use **Check in** on the booking.
-Without a camera, expand "Show the check-in link" on the kiosk and paste it into the scanner dialog.
+For check-in: log in as the student and open the booking. The **Check in** button is disabled until the
+start time and unlocks on its own when it arrives (no page refresh needed).
 
 ### Create an admin on a fresh database
 
@@ -197,8 +197,7 @@ ADMIN_PASSWORD='Choose-A-Strong-Pass1' npm run create-admin -- you@college.edu "
 | `PORT` | 5000 | API port |
 | `MONGO_URI` | mongodb://127.0.0.1:27017/campus_booking | Database |
 | `JWT_SECRET`, `JWT_EXPIRES_IN` | dev fallback, 7d | Session tokens (**required in production**) |
-| `QR_TOKEN_SECRET`, `QR_TOKEN_TTL_SECONDS` | dev fallback, 90 | Venue check-in tokens (**secret required in production**) |
-| `CLIENT_URL` | http://localhost:5173 | Allowed origin(s), comma-separated; first one is used in QR links |
+| `CLIENT_URL` | http://localhost:5173 | Allowed origin(s), comma-separated |
 | `APP_TIMEZONE` | Asia/Kolkata | Campus timezone for hours, bookings and analytics |
 | `COOKIE_SECURE`, `COOKIE_SAMESITE` | prod: true / none | Cookie flags |
 | `TRUST_PROXY` | prod: true | Behind Render/Railway/Nginx |
@@ -224,6 +223,10 @@ GET    /api/notifications  PATCH /api/notifications/:id/read  POST /api/notifica
 GET    /api/admin/dashboard | /analytics | /users | /bookings | /policy | /audit-logs
 ```
 
+**Postman:** import [`server/postman/campus-booking.postman_collection.json`](server/postman/campus-booking.postman_collection.json)
+(every endpoint, sample bodies, demo logins). Auth is a cookie, so after a *Login* request Postman stays signed in;
+requests that create data save their IDs (`resourceId`, `bookingId`, …) for the next requests.
+
 Example error:
 
 ```json
@@ -238,13 +241,13 @@ Status codes: 400 validation, 401 unauthenticated, 403 forbidden/restricted, 404
 
 ```bash
 cd server
-npm test        # 55 API tests against mongodb://127.0.0.1:27017/campus_booking_test
+npm test        # 54 API tests against mongodb://127.0.0.1:27017/campus_booking_test
                 # (override with MONGO_URI_TEST)
 ```
 
 Covers authentication, authorization, validation, overlap, **concurrent booking**,
 **double-submit idempotency**, **concurrent waitlist promotion**, **approval after cancellation**,
-approval/cancel races, QR check-in rules, no-show jobs and penalties, reminders, waitlist
+approval/cancel races, check-in rules, no-show jobs and penalties, reminders, waitlist
 offers/expiry and analytics. See [docs/ARCHITECTURE.md §14](docs/ARCHITECTURE.md#14-testing-plan).
 
 ## Deployment
@@ -254,7 +257,7 @@ Not deployed yet. The application is ready for the following setup:
 ```text
 client (Vite build)  → Vercel / Netlify         VITE_API_URL=VITE_SOCKET_URL=https://<api-host>
 server (Node)        → Render / Railway / Fly    NODE_ENV=production, CLIENT_URL=https://<web-host>,
-                                                 JWT_SECRET, QR_TOKEN_SECRET, MONGO_URI, TRUST_PROXY=true
+                                                 JWT_SECRET, MONGO_URI, TRUST_PROXY=true
 database             → MongoDB Atlas             (replica set → transactions enabled automatically)
 ```
 

@@ -2,7 +2,7 @@
  * Demo data seeder. WIPES the configured database, then builds data through the
  * real services (not raw inserts): resources via resourceService, bookings via
  * bookingService (validation, slot locks, approvals, cancellations), check-ins
- * with real QR tokens, and the real background jobs for no-shows/completion.
+ * and the real background jobs for no-shows/completion.
  *
  * History is produced by moving the application clock back day by day and
  * replaying realistic activity, so analytics, no-show records and restrictions
@@ -20,7 +20,7 @@ import { Notification } from '../models/Notification.js';
 import { User } from '../models/User.js';
 import { hashPassword } from '../services/authService.js';
 import { approveBooking, cancelBooking, checkIn, createBooking, rejectBooking } from '../services/bookingService.js';
-import { changeResourceStatus, createResource, issueCheckInToken } from '../services/resourceService.js';
+import { changeResourceStatus, createResource } from '../services/resourceService.js';
 import { getActiveRestriction } from '../services/restrictionService.js';
 import { joinWaitlist } from '../services/waitlistService.js';
 import { clock } from '../utils/clock.js';
@@ -245,7 +245,7 @@ async function main() {
       if (random() < 0.12) await cancelBooking(booking._id, { _id: booking.user, role: 'STUDENT' }, { reason: 'Plans changed' }).catch(() => {});
     }
 
-    // Most confirmed bookings are checked in at the venue; some are missed.
+    // Most confirmed bookings are checked in; some are missed.
     const confirmed = await Booking.find({ _id: { $in: dayBookings.map((b) => b._id) }, status: 'CONFIRMED' }).sort({ startAt: 1 });
     for (const booking of confirmed) {
       const isAsha = String(booking.user) === String(asha._id);
@@ -257,9 +257,8 @@ async function main() {
         continue;
       }
       clock.set(addMinutes(booking.startAt, Math.floor(random() * 10)));
-      const { token } = await issueCheckInToken(booking.resource, admin);
       const user = await User.findById(booking.user);
-      await checkIn(booking._id, user, token).catch(() => {});
+      await checkIn(booking._id, user).catch(() => {});
     }
 
     // End of day: the real scheduler marks no-shows and completes sessions.
@@ -317,7 +316,7 @@ async function main() {
   console.log('  Faculty  iyer@campus.edu   (approver: Electronics Lab)');
   console.log('  Student  asha@campus.edu   (main demo student)');
   console.log('  Student  ravi@campus.edu');
-  console.log('\nFor the QR / no-show demos run: npm run demo -- check-in | no-show');
+  console.log('\nFor the check-in / no-show demos run: npm run demo -- check-in | no-show');
   await mongoose.disconnect();
 }
 

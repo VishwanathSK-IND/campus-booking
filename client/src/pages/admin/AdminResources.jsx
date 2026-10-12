@@ -143,11 +143,7 @@ export default function AdminResources() {
                         </ButtonLink>
                         <Button variant="secondary" size="sm" onClick={() => setStatusFor(r)}>
                           Status
-                        </Button>
-                        <ButtonLink to={`/kiosk/${r._id}`} variant="ghost" size="sm">
-                          Kiosk QR
-                        </ButtonLink>
-                      </div>
+                        </Button>                      </div>
                     </td>
                   </tr>
                 ))}

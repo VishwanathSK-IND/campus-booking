@@ -15,7 +15,6 @@ export async function locations(req, res) {
 export async function detail(req, res) {
   const resource = await resources.getResource(req.params.resourceId, req.user);
   const data = resource.toObject();
-  data.canManageCheckIn = resources.canManageCheckIn(req.user, resource);
   if (req.user.role !== 'ADMIN') {
     data.approvers = (data.approvers || []).map((a) => ({ _id: a._id, name: a.name }));
   }
@@ -47,8 +46,4 @@ export async function addBlock(req, res) {
 
 export async function removeBlock(req, res) {
   ok(res, await resources.removeBlockedPeriod(req.params.resourceId, req.params.blockId, req.user), 'Blocked period removed');
-}
-
-export async function checkInToken(req, res) {
-  ok(res, await resources.issueCheckInToken(req.params.resourceId, req.user));
 }

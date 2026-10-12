@@ -20,7 +20,7 @@ export function RulesList({ rules }) {
         ['Approval', rules.approvalRequired ? `Required (exempt: ${rules.approvalExemptRoles.map((r) => r.toLowerCase()).join(', ') || 'none'})` : 'Not required'],
         ['Priority', rules.facultyPriority ? 'Faculty requests are prioritised in approval and waitlist queues' : 'First come, first served'],
         ['Cancellation', `Until ${duration(rules.cancellationDeadlineMinutes) || '0 min'} before start`],
-        ['Check-in', `From ${rules.checkInOpensBeforeMinutes} min before to ${rules.checkInGraceMinutes} min after start, or it becomes a no-show`],
+        ['Check-in', `From the start time until ${rules.checkInGraceMinutes} min after, or it becomes a no-show`],
       ]}
     />
   );
@@ -56,11 +56,6 @@ export default function ResourceDetail() {
             {user.role === 'ADMIN' && (
               <ButtonLink to={`/admin/resources/${resource._id}/edit`} variant="secondary">
                 Edit
-              </ButtonLink>
-            )}
-            {resource.canManageCheckIn && (
-              <ButtonLink to={`/kiosk/${resource._id}`} variant="secondary">
-                Check-in kiosk
               </ButtonLink>
             )}
             {bookable && <ButtonLink to={`/resources/${resource._id}/book?date=${date}`}>Book this resource</ButtonLink>}

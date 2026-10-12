@@ -1,7 +1,5 @@
 import crypto from 'node:crypto';
-import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import { env } from '../config/env.js';
 import { Booking } from '../models/Booking.js';
 import { Resource } from '../models/Resource.js';
 import { SlotLock } from '../models/SlotLock.js';
@@ -373,39 +371,21 @@ export async function cancelBooking(bookingId, actor, { reason, system = false }
   });
 }
 
-function verifyCheckInToken(token) {
-  try {
-    const payload = jwt.verify(token, env.QR_TOKEN_SECRET);
-    if (payload.typ !== 'checkin' || !payload.rid) throw new Error('wrong token type');
-    return payload;
-  } catch (error) {
-    if (error?.name === 'TokenExpiredError') {
-      throw badRequest('QR_TOKEN_EXPIRED', 'This check-in code has expired. Scan the code currently shown at the venue.');
-    }
-    throw badRequest('QR_TOKEN_INVALID', 'This is not a valid check-in code');
-  }
-}
-
 /**
- * Venue QR check-in. The token proves the user is looking at the rotating code
- * displayed at the resource right now; the server then checks ownership,
- * resource match, state and the check-in window. QR contents alone are never trusted.
+ * One-click check-in by the booking owner. Allowed from the booked start time
+ * until the grace period ends (checkInClosesAt); after that the booking becomes a no-show.
  */
-export async function checkIn(bookingId, user, token) {
-  const payload = verifyCheckInToken(token);
+export async function checkIn(bookingId, user) {
   const booking = await Booking.findById(bookingId);
   if (!booking) throw notFound('Booking');
   if (String(booking.user) !== String(user._id)) throw forbidden('You can only check in to your own bookings', 'NOT_BOOKING_OWNER');
-  if (payload.rid !== String(booking.resource)) {
-    throw badRequest('QR_RESOURCE_MISMATCH', `This code belongs to a different venue. Scan the code at ${booking.resourceSnapshot.name}.`);
-  }
   if (booking.status === 'CHECKED_IN') throw conflict('ALREADY_CHECKED_IN', 'You have already checked in to this booking');
   if (booking.status !== 'CONFIRMED') {
     throw conflict('INVALID_BOOKING_STATE', `A ${booking.status.toLowerCase().replace('_', ' ')} booking cannot be checked in`);
   }
   const now = clock.now();
-  if (now < booking.checkInOpensAt) {
-    throw unprocessable('CHECK_IN_TOO_EARLY', `Check-in opens at ${formatLocal(booking.checkInOpensAt, 'HH:mm')}`);
+  if (now < booking.startAt) {
+    throw unprocessable('CHECK_IN_TOO_EARLY', `Check-in opens at ${formatLocal(booking.startAt, 'HH:mm')}`);
   }
   if (now > booking.checkInClosesAt) {
     throw unprocessable('CHECK_IN_CLOSED', `The check-in window closed at ${formatLocal(booking.checkInClosesAt, 'HH:mm')}`);
@@ -415,7 +395,7 @@ export async function checkIn(bookingId, user, token) {
     booking._id,
     'CONFIRMED',
     'CHECKED_IN',
-    { set: { checkedInAt: now, checkInStatus: 'CHECKED_IN' }, by: user._id, note: 'QR check-in' },
+    { set: { checkedInAt: now, checkInStatus: 'CHECKED_IN' }, by: user._id, note: 'Checked in' },
   );
   if (!updated) {
     const current = await Booking.findById(booking._id).select('status');
@@ -438,7 +418,8 @@ export function bookingActions(booking, viewer, resource, now = clock.now()) {
     (booking.status === 'PENDING_APPROVAL' || now <= booking.cancellationDeadlineAt || isAdmin);
   return {
     cancel: ownerCanCancel || (isAdmin && open && now < booking.endAt),
-    checkIn: isOwner && booking.status === 'CONFIRMED' && now >= booking.checkInOpensAt && now <= booking.checkInClosesAt,
+    // Show the Check in button until the window closes; the UI keeps it disabled until startAt.
+    checkIn: isOwner && booking.status === 'CONFIRMED' && now <= booking.checkInClosesAt,
     review: booking.status === 'PENDING_APPROVAL' && canReview(viewer, booking, resource) && now < booking.startAt,
   };
 }
@@ -535,21 +516,6 @@ export async function adminListBookings({ search, resource, user, status, approv
     Booking.countDocuments(filter),
   ]);
   return { items, total };
-}
-
-/** Bookings the user can check in to at a resource right now (used by the QR landing page). */
-export async function checkInCandidates(user, resourceId) {
-  const now = clock.now();
-  return Booking.find({
-    user: user._id,
-    resource: resourceId,
-    status: { $in: ['CONFIRMED', 'CHECKED_IN'] },
-    endAt: { $gt: now },
-    checkInOpensAt: { $lte: new Date(now.getTime() + 6 * 60 * 60 * 1000) },
-  })
-    .select('code date startTime endTime status checkInOpensAt checkInClosesAt resourceSnapshot')
-    .sort({ startAt: 1 })
-    .lean();
 }
 
 export { ACTIVE_STATUSES };

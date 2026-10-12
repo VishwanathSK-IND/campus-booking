@@ -217,7 +217,7 @@ export async function sendReminders(now = clock.now()) {
       user: booking.user,
       type: 'CHECK_IN_REMINDER',
       title: 'Remember to check in',
-      message: `${booking.resourceSnapshot.name} starts at ${booking.startTime}. Scan the venue QR code between ${formatLocal(booking.checkInOpensAt, 'HH:mm')} and ${formatLocal(booking.checkInClosesAt, 'HH:mm')} or the booking will be marked as a no-show.`,
+      message: `${booking.resourceSnapshot.name} starts at ${booking.startTime}. Open the booking and press Check in between ${formatLocal(booking.startAt, 'HH:mm')} and ${formatLocal(booking.checkInClosesAt, 'HH:mm')} or it will be marked as a no-show.`,
       booking: booking._id,
       resource: booking.resource,
       dedupeKey: `checkin-reminder:${booking._id}`,

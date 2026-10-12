@@ -26,10 +26,6 @@ export async function pendingApprovals(req, res) {
   ok(res, items, 'Pending approvals loaded', 200, paginationMeta(query.page, query.limit, total));
 }
 
-export async function checkInCandidates(req, res) {
-  ok(res, await bookings.checkInCandidates(req.user, req.valid.query.resource));
-}
-
 export async function detail(req, res) {
   ok(res, await bookings.getBookingForViewer(req.params.bookingId, req.user));
 }
@@ -47,5 +43,5 @@ export async function cancel(req, res) {
 }
 
 export async function checkIn(req, res) {
-  ok(res, await bookings.checkIn(req.params.bookingId, req.user, req.valid.body.token), 'Successfully checked in');
+  ok(res, await bookings.checkIn(req.params.bookingId, req.user), 'Successfully checked in');
 }

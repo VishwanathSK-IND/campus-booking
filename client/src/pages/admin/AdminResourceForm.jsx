@@ -20,7 +20,6 @@ const DEFAULT_RULES = {
   approvalExemptRoles: ['ADMIN'],
   facultyPriority: false,
   cancellationDeadlineMinutes: 60,
-  checkInOpensBeforeMinutes: 15,
   checkInGraceMinutes: 15,
 };
 const EMPTY = {
@@ -279,13 +278,9 @@ export default function AdminResourceForm() {
           <Field label="Cancellation deadline (min before)" htmlFor="cd">
             <Input id="cd" type="number" min="0" value={r.cancellationDeadlineMinutes} onChange={rule('cancellationDeadlineMinutes')} />
           </Field>
-          <Field label="Check-in opens (min before start)" htmlFor="co">
-            <Input id="co" type="number" min="0" value={r.checkInOpensBeforeMinutes} onChange={rule('checkInOpensBeforeMinutes')} />
-          </Field>
-          <Field label="Check-in grace (min after start)" htmlFor="cg" hint="After this, the booking becomes a no-show">
+          <Field label="Check-in grace (min after start)" htmlFor="cg" hint="Check-in opens at the start time; after this, the booking becomes a no-show">
             <Input id="cg" type="number" min="1" value={r.checkInGraceMinutes} onChange={rule('checkInGraceMinutes')} />
           </Field>
-          <div />
           <div className="sm:col-span-3">
             <RoleChecks label="Who can book" value={r.allowedRoles} onChange={(v) => setRule('allowedRoles', v)} />
           </div>
@@ -303,7 +298,7 @@ export default function AdminResourceForm() {
               Faculty priority — faculty requests rank ahead of student requests in the approval queue and waitlist. Never cancels existing bookings.
             </span>
           </label>
-          <Field label="Approvers (faculty who review requests and can show the check-in kiosk)" htmlFor="appr" className="sm:col-span-3" hint="If none, requests go to all admins. Ctrl/Cmd-click to select several.">
+          <Field label="Approvers (faculty who review requests)" htmlFor="appr" className="sm:col-span-3" hint="If none, requests go to all admins. Ctrl/Cmd-click to select several.">
             <Select id="appr" multiple className="h-28" value={form.approvers} onChange={(e) => setForm({ ...form, approvers: [...e.target.selectedOptions].map((o) => o.value) })}>
               {approvers.data?.map((a) => (
                 <option key={a._id} value={a._id}>
