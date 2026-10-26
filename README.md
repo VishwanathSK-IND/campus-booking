@@ -11,6 +11,7 @@ halls, sports courts, rooms and equipment.
 | **Live application** | https://campus-booking-beta.vercel.app |
 | Backend API (health check) | https://campus-booking-api-quij.onrender.com/api/health |
 | Source code | https://github.com/VishwanathSK-IND/campus-booking |
+| Demo Video | https://drive.google.com/file/d/1hAAbu-TBPFJLlfAgm-4cPCDqotFFzFDS/view?usp=drive_link |
 
 **Demo logins** (password for all: `Campus@123`): `admin@campus.edu` (admin), `mehta@campus.edu` (faculty / approver),
 `asha@campus.edu` (student). Students can also register their own account. More accounts: [Demo accounts](#demo-accounts-password-campus123).
